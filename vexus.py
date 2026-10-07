@@ -49,7 +49,6 @@ def get_profile(nickname):
     except: pass
     return {}
 
-# --- БЕЗОПАСНОЕ ОПТИМИЗИРОВАННОЕ ПОЛУЧЕНИЕ ВСЕХ ПРОФИЛЕЙ ---
 def get_all_profiles_cached():
     try:
         res = requests.get(f"{URL}/rest/v1/profiles", headers=headers)
@@ -60,7 +59,7 @@ def get_all_profiles_cached():
 
 # --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.91 — Вход")
+    st.title("💬 Vexus v4.92 — Вход")
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
     nick_input = st.text_input("Придумайте ваш никнейм в Vexus:", max_chars=15).strip().lower()
@@ -78,7 +77,7 @@ if not st.session_state.nickname:
                     if existing_user.get('nickname') == nick_input:
                         st.session_state.user_email = email_input
                         st.session_state.nickname = nick_input
-                        st.success("Успешный html_вход!")
+                        st.success("Успешный вход!")
                         st.rerun()
                     else: st.error("Этот Gmail уже привязан к другому никнейму!")
                 else:
@@ -88,7 +87,7 @@ if not st.session_state.nickname:
                         requests.post(f"{URL}/rest/v1/profiles", headers=headers, json=new_user)
                         st.session_state.user_email = email_input
                         st.session_state.nickname = nick_input
-                        st.success("Регистрация успешна!")
+                        st.success("Registration Успешна!")
                         st.rerun()
             except Exception as e: st.error(f"Ошибка авторизации: {e}")
 
@@ -176,10 +175,9 @@ else:
 
         st.divider()
 
-        # Получаем кэш аватаров в безопасном режиме
         avatar_cache = get_all_profiles_cached()
 
-        # Отображение сообщений
+        # Отображение сообщений — СУПЕР ЛИНЕЙНЫЙ И БЕЗОПАСНЫЙ ВЫВОД
         res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=35", headers=headers)
         if res.status_code == 200:
             for msg in reversed(res.json()):
@@ -187,7 +185,7 @@ else:
                     d_text = decrypt_text(msg.get('text', ''), st.session_state.room_password) if is_private else msg.get('text', '')
                     d_img = decrypt_text(msg.get('image_url', ''), st.session_state.room_password) if is_private else msg.get('image_url', '')
                     is_me = (msg['sender'] == st.session_state.nickname)
-                    
                     ava_b64 = avatar_cache.get(msg['sender'], '')
                     
-                    with st.chat_message("user" if is_me else "assistant"):
+                    # Простой вывод разметки
+                    st.markdown(f"### 💬 @{msg['sender']}" if is_me else f"👤 @{msg['sender']}")
