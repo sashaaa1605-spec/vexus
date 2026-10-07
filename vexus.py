@@ -49,7 +49,7 @@ def get_profile(nickname):
         res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}&r={random.randint(1,99999)}", headers=headers)
         if res.status_code == 200 and res.json():
             data = res.json()
-            return data[0] if isinstance(data, list) else data
+            return data if isinstance(data, list) else data
     except: pass
     return {}
 
@@ -64,7 +64,6 @@ def get_all_profiles_cached():
 # --- ОКНО ВХОДА И УПРОЩЕННОЙ РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
     st.title("💬 Vexus — Вход")
-    
     tab1, tab2 = st.tabs(["🔑 Быстрый Вход", "📝 Новая Регистрация"])
     
     with tab1:
@@ -78,10 +77,8 @@ if not st.session_state.nickname:
                     st.session_state.user_email = prof.get('email', '')
                     st.success("Успешный вход!")
                     st.rerun()
-                else:
-                    st.error("Пользователь с таким никнеймом не найден!")
-            else:
-                st.error("Введите никнейм!")
+                else: st.error("Пользователь с таким никнеймом не найден!")
+            else: st.error("Введите никнейм!")
 
     with tab2:
         st.markdown("### Создать новый профиль Vexus")
@@ -89,19 +86,14 @@ if not st.session_state.nickname:
         nick_input = st.text_input("Придумайте ваш никнейм (только буквы/цифры):", max_chars=15).strip().lower()
         
         if st.button("Зарегистрироваться", use_container_width=True):
-            if not email_input or not nick_input: 
-                st.error("Заполните все поля!")
-            elif "@" not in email_input: 
-                st.error("Введите корректный Gmail адрес!")
+            if not email_input or not nick_input: st.error("Заполните все поля!")
+            elif "@" not in email_input: st.error("Введите корректный Gmail адрес!")
             else:
                 try:
                     res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
                     res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
-                    
-                    if res_email and len(res_email) > 0:
-                        st.error("Этот Gmail уже привязан к другому аккаунту! Используйте вкладку 'Быстрый Вход'.")
-                    elif res_nick and len(res_nick) > 0:
-                        st.error("Этот никнейм уже занят!")
+                    if res_email and len(res_email) > 0: st.error("Этот Gmail уже привязан к другому аккаунту!")
+                    elif res_nick and len(res_nick) > 0: st.error("Этот никнейм уже занят!")
                     else:
                         new_user = {"email": email_input, "nickname": nick_input}
                         requests.post(f"{URL}/rest/v1/profiles", headers=headers, json=new_user)
@@ -109,8 +101,7 @@ if not st.session_state.nickname:
                         st.session_state.nickname = nick_input
                         st.success("Регистрация успешна!")
                         st.rerun()
-                except Exception as e: 
-                    st.error(f"Ошибка базы: {e}")
+                except Exception as e: st.error(f"Ошибка базы: {e}")
 
 # --- ГЛАВНЫЙ ИНТЕРФЕЙС VEXUS ---
 else:
@@ -195,8 +186,11 @@ else:
 
         avatar_cache = get_all_profiles_cached()
 
-        # Антикэш-запрос к Supabase (?r=случайное_число) заставит Streamlit обновить переписку
-        res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30&r={random.randint(1,99999)}", headers=headers)
+        # Отображение сообщений — ПОЛНОСТЬЮ ЛИНЕЙНЫЙ ВЫВОД БЕЗ ОПАСНЫХ ВЛОЖЕННОСТЕЙ
+        res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=35&r={random.randint(1,99999)}", headers=headers)
         if res.status_code == 200:
-            for msg in reversed(res.json()):
-                if msg.get("sender_room", "Общий чат") == st.session_state.active_chat:
+            # Делаем фильтрацию комнат на первом уровне без вложенных блоков if
+            filtered_messages = [m for m in res.json() if m.get("sender_room", "Общий чат") == st.session_state.active_chat]
+            
+            for msg in reversed(filtered_messages):
+                d_text = decrypt_text(msg.get('text', ''), st.session_state.room_password) if msg.get('text', '').startswith("gAAAAA") else msg.get('text', '')
