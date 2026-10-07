@@ -1,92 +1,71 @@
-import customtkinter as ctk
+import streamlit as st
 from supabase import create_client, Client
-import threading
 import time
 
 # --- НАЛАШТУВАННЯ SUPABASE ---
 URL = "https://dqpdfreewxzefsaejmob.supabase.co/rest/v1/"
 KEY = "sb_publishable_XBWFiWdA9Eg2msn3T04XkQ_oKX69lpG"
-supabase: Client = create_client(URL, KEY)
 
-class ChatApp(ctk.CTk):
-    def __init__(self):
-        super().__init__()
-        
-        self.title("vexus")
-        self.geometry("450x600")
-        ctk.set_appearance_mode("dark")
-        
-        self.nickname = ""
-        self.last_message_id = 0
-        
-        # Вікно входу для нікнейму
-        self.login_frame = ctk.CTkFrame(self)
-        self.login_frame.pack(fill="both", expand=True, padx=20,专padx=20, pady=20)
-        
-        self.lbl = ctk.CTkLabel(self.login_frame, text="Введіть ваш нікнейм:", font=("Arial", 16))
-        self.lbl.pack(pady=20)
-        
-        self.entry_nick = ctk.CTkEntry(self.login_frame, placeholder_text="Мій нік...", width=200)
-        self.entry_nick.pack(pady=10)
-        
-        self.btn_login = ctk.CTkButton(self.login_frame, text="Увійти в чат", command=self.start_chat)
-        self.btn_login.pack(pady=20)
-        
-        # Головне вікно чату (спочатку приховане)
-        self.chat_frame = ctk.CTkFrame(self)
-        
-        self.txt_area = ctk.CTkTextbox(self.chat_frame, width=400, height=450, state="disabled", font=("Arial", 14))
-        self.txt_area.pack(padx=10, pady=10, fill="both", expand=True)
-        
-        self.input_frame = ctk.CTkFrame(self.chat_frame)
-        self.input_frame.pack(padx=10, pady=5, fill="x")
-        
-        self.entry_msg = ctk.CTkEntry(self.input_frame, placeholder_text="Напишіть повідомлення...", width=300)
-        self.entry_msg.pack(side="left", padx=5, fill="x", expand=True)
-        self.entry_msg.bind("<Return>", lambda event: self.send_message())
-        
-        self.btn_send = ctk.CTkButton(self.input_frame, text="=>", width=50, command=self.send_message)
-        self.btn_send.pack(side="right", padx=5)
+@st.cache_resource
+def get_supabase_client():
+    return create_client(URL, KEY)
 
-    def start_chat(self):
-        nick = self.entry_nick.get().strip()
-        if nick:
-            self.nickname = nick
-            self.login_frame.pack_forget()
-            self.chat_frame.pack(fill="both", expand=True)
-            
-            # Запуск фонового потоку для оновлення повідомлень
-            threading.Thread(target=self.receive_messages, daemon=True).start()
+supabase = get_supabase_client()
 
-    def send_message(self):
-        msg_text = self.entry_msg.get().strip()
+st.set_page_config(page_title="Наш Web Месенджер", page_icon="💬", layout="centered")
+st.title("💬 Наш Месенджер")
+
+if "nickname" not in st.session_state:
+    st.session_state.nickname = ""
+
+# --- ВІКНО ВХОДУ ---
+if not st.session_state.nickname:
+    st.subheader("Введіть ваш нікнейм для входу:")
+    nick_input = st.text_input("Мій нік...", max_chars=15)
+    if st.button("Увійти в чат"):
+        if nick_input.strip():
+            st.session_state.nickname = nick_input.strip()
+            st.rerun()
+        else:
+            st.error("Нікнейм не може бути порожнім!")
+
+# --- ВІКНО ЧАТУ ---
+else:
+    st.write(f"Ви зайшли як: **{st.session_state.nickname}**")
+    
+    if st.button("Вийти з чату"):
+        st.session_state.nickname = ""
+        st.rerun()
+
+    st.divider()
+
+    def send_msg():
+        msg_text = st.session_state.msg_input.strip()
         if msg_text:
-            self.entry_msg.delete(0, "end")
-            # Відправка в базу даних Supabase
             try:
-                supabase.table("messages").insert({"sender": self.nickname, "text": msg_text}).execute()
+                supabase.table("messages").insert({"sender": st.session_state.nickname, "text": msg_text}).execute()
+                st.session_state.msg_input = ""
             except Exception as e:
-                print("Помилка відправки:", e)
+                st.error(f"Помилка відправки: {e}")
 
-    def receive_messages(self):
-        while True:
-            try:
-                # Запитуємо нові повідомлення, які мають ID більше, ніж ми вже бачили
-                response = supabase.table("messages").select("*").gt("id", self.last_message_id).order("id").execute()
-                data = response.data
-                
-                if data:
-                    self.txt_area.configure(state="normal")
-                    for msg in data:
-                        self.txt_area.insert("end", f"[{msg['sender']}]: {msg['text']}\n")
-                        self.last_message_id = msg['id']
-                    self.txt_area.configure(state="disabled")
-                    self.txt_area.see("end") # Прокрутка вниз
-            except Exception as e:
-                print("Помилка отримання:", e)
-                
-            time.sleep(1) # Перевірка оновлень щосекунди
+    with st.form(key="send_form", clear_on_submit=True):
+        st.text_input("Напишіть повідомлення...", key="msg_input")
+        submit_button = st.form_submit_button(label="Надіслати", on_click=send_msg)
 
-if __name__ == "__main__":
-    app = ChatApp()
-    app.mainloop()
+    st.divider()
+
+    try:
+        response = supabase.table("messages").select("*").order("id", descending=True).limit(50).execute()
+        messages = response.data
+        
+        if messages:
+            for msg in reversed(messages):
+                st.markdown(f"**[{msg['sender']}]**: {msg['text']}")
+        else:
+            st.info("Чат порожній. Напишіть щось першим!")
+            
+    except Exception as e:
+        st.error(f"Помилка завантаження повідомлень: {e}")
+
+    time.sleep(3)
+    st.rerun()
