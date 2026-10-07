@@ -39,22 +39,29 @@ bg = "#182533" if st.session_state.theme == "dark" else "#ffffff"
 tc = "#ffffff" if st.session_state.theme == "dark" else "#000000"
 st.markdown(f"<style>.stApp {{background-color: {bg}; color: {tc};}}</style>", unsafe_allow_html=True)
 
-# --- ФУНКЦИИ ПРОФИЛЕЙ ---
+# --- БЫСТРАЯ ФУНКЦИЯ ПРОФИЛЕЙ (БЕЗ ТОРМОЗОВ) ---
 def get_profile(nickname):
+    res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
+    if res.status_code == 200:
+        data = res.json()
+        if data and len(data) > 0: return data[0] if isinstance(data, list) else data
+    return {}
+
+# --- ПОЛУЧЕНИЕ ВСЕХ ПРОФИЛЕЙ ОДНИМ ЗАПРОСОМ (ДЛЯ СКОРОСТИ) ---
+def get_all_profiles_cached():
     try:
-        res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
+        res = requests.get(f"{URL}/rest/v1/profiles?select=nickname,avatar_b64", headers=headers)
         if res.status_code == 200:
-            data = res.json()
-            if data and len(data) > 0: return data[0]
+            return {p['nickname']: p.get('avatar_b64', '') for p in res.json()}
     except: pass
     return {}
 
 # --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.8 — Вход")
+    st.title("💬 Vexus v4.9 — Вход")
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
-    nick_input = st.text_input("Придумайте ваш никнейм в Vexus (только буквы/цифры):", max_chars=15).strip().lower()
+    nick_input = st.text_input("Придумайте ваш никнейм в Vexus:", max_chars=15).strip().lower()
     
     if st.button("Войти / Зарегистрироваться", use_container_width=True):
         if not email_input or not nick_input: st.error("Заполните все поля!")
@@ -167,20 +174,16 @@ else:
 
         st.divider()
 
-        # Отображение сообщений — ПОЛНОСТЬЮ БЕЗОПАСНАЯ ЛИНЕЙНАЯ СТРУКТУРА
-        res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30", headers=headers)
+        # ЗАГРУЖАЕМ ВСЕ ПРОФИЛИ ОДНИМ ПАКЕТОМ (Убирает лаги)
+        avatar_cache = get_all_profiles_cached()
+
+        # Отображение сообщений — ТЕПЕРЬ СУПЕРБЫСТРОЕ
+        res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=35", headers=headers)
         if res.status_code == 200:
             for msg in reversed(res.json()):
                 if msg.get("sender_room", "Общий чат") == st.session_state.active_chat:
                     d_text = decrypt_text(msg.get('text', ''), st.session_state.room_password) if is_private else msg.get('text', '')
                     d_img = decrypt_text(msg.get('image_url', ''), st.session_state.room_password) if is_private else msg.get('image_url', '')
                     is_me = (msg['sender'] == st.session_state.nickname)
-                    author_prof = get_profile(msg['sender'])
                     
-                    with st.chat_message("user" if is_me else "assistant"):
-                        if author_prof.get("avatar_b64"): st.image(base64.b64decode(author_prof["avatar_b64"]), width=30)
-                        st.markdown(f"**@{msg['sender']}**")
-                        if d_text: st.write(d_text)
-                        if d_img and "[Ошибка]" not in d_img and "[Зашифровано" not in d_img: st.image(base64.b64decode(d_img.encode()))
-        else: st.error("Ошибка подключения к базе")
-
+                    # Берем аватарку из быстрой памяти компьютера (кеша), а не из интернета
