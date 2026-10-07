@@ -65,7 +65,7 @@ def get_all_profiles_cached():
     except: pass
     return {}
 
-# --- ОКНО ВХОДА (Показывается только если куки пустые) ---
+# --- ОКНО ВХОДА ---
 if not st.session_state.nickname:
     st.title("💬 Vexus — Вход")
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
@@ -73,7 +73,7 @@ if not st.session_state.nickname:
     nick_input = st.text_input("Придумайте ваш никнейм в Vexus:", max_chars=15).strip().lower()
     
     if st.button("Войти / Зарегистрироваться", use_container_width=True):
-        if not email_input or not nick_input: st.error("Заполните все fields!")
+        if not email_input or not nick_input: st.error("Заполните все поля!")
         elif "@" not in email_input: st.error("Введите корректный Gmail адрес!")
         else:
             try:
@@ -83,7 +83,6 @@ if not st.session_state.nickname:
                 
                 if existing_user:
                     if existing_user.get('nickname') == nick_input:
-                        # Записываем в куки навсегда
                         st.context.cookies["saved_email"] = email_input
                         st.context.cookies["saved_nick"] = nick_input
                         st.session_state.user_email = email_input
@@ -142,7 +141,6 @@ else:
             st.session_state.room_password = st.text_input("Пароль чата:", value=st.session_state.room_password, type="password")
             
         if st.button("Выйти из аккаунта", use_container_width=True):
-            # Стираем куки при выходе
             if "saved_email" in st.context.cookies: del st.context.cookies["saved_email"]
             if "saved_nick" in st.context.cookies: del st.context.cookies["saved_nick"]
             st.session_state.nickname = ""
@@ -190,8 +188,10 @@ else:
 
         avatar_cache = get_all_profiles_cached()
 
-        # Полноценное отображение сообщений через нативные безопасные компоненты
+        # Отображение сообщений — ПОЛНОСТЬЮ ЛИНЕЙНЫЙ ВЫВОД БЕЗ ВЛОЖЕННЫХ IF
         res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30", headers=headers)
         if res.status_code == 200:
             for msg in reversed(res.json()):
+                # Проверяем комнату в один надежный рядок
                 if msg.get("sender_room", "Общий чат") == st.session_state.active_chat:
+                    d_text = decrypt_text(msg.get('text', ''), st.session_state.room_password) if msg.get('text', '').startswith("gAAAAA") else msg.get('text', '')
