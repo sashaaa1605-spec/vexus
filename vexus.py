@@ -45,12 +45,12 @@ def get_profile(nickname):
     if res.status_code == 200:
         data = res.json()
         if data and len(data) > 0:
-            return data[0]
+            return data[0] if isinstance(data, list) else data
     return {}
 
 # --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.5 — Вход")
+    st.title("💬 Vexus v4.6 — Вход")
     
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
@@ -65,9 +65,11 @@ if not st.session_state.nickname:
             res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
             res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
             
-            if res_email and len(res_email) > 0:
-                user_data = res_email[0]
-                if user_data.get('nickname') == nick_input:
+            # Проверяем список профилей
+            existing_user = res_email[0] if (isinstance(res_email, list) and len(res_email) > 0) else None
+            
+            if existing_user:
+                if existing_user.get('nickname') == nick_input:
                     st.session_state.user_email = email_input
                     st.session_state.nickname = nick_input
                     st.success("Успешный вход!")
@@ -196,7 +198,7 @@ else:
 
         st.divider()
 
-        # Отображение сообщений — полностью исправленная разметка
+        # Отображение сообщений — БЕЗ опасных многострочных условий
         res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30", headers=headers)
         if res.status_code == 200:
             messages = res.json()
@@ -209,8 +211,6 @@ else:
                         d_text = decrypt_text(d_text, st.session_state.room_password)
                         d_img = decrypt_text(d_img, st.session_state.room_password)
 
-                    is_me = msg['sender'] == st.session_state.nickname
+                    is_me = (msg['sender'] == st.session_state.nickname)
                     author_prof = get_profile(msg['sender'])
                     
-                    with st.chat_message("user" if is_me else "assistant"):
-                        if author_prof.get("avatar_b64"):
