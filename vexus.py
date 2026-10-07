@@ -44,13 +44,13 @@ def get_profile(nickname):
     res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
     if res.status_code == 200:
         data = res.json()
-        if data:
+        if data and len(data) > 0:
             return data[0]
     return {}
 
 # --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.4 — Вход")
+    st.title("💬 Vexus v4.5 — Вход")
     
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
@@ -65,8 +65,8 @@ if not st.session_state.nickname:
             res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
             res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
             
-            if res_email:
-                user_data = res_email[0] if isinstance(res_email, list) else res_email
+            if res_email and len(res_email) > 0:
+                user_data = res_email[0]
                 if user_data.get('nickname') == nick_input:
                     st.session_state.user_email = email_input
                     st.session_state.nickname = nick_input
@@ -75,7 +75,7 @@ if not st.session_state.nickname:
                 else:
                     st.error("Этот Gmail уже привязан к другому никнейму!")
             else:
-                if res_nick:
+                if res_nick and len(res_nick) > 0:
                     st.error("Этот никнейм уже занят!")
                 else:
                     new_user = {"email": email_input, "nickname": nick_input}
@@ -196,7 +196,7 @@ else:
 
         st.divider()
 
-        # Отображение сообщений без единого опасного try-except блока
+        # Отображение сообщений — полностью исправленная разметка
         res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30", headers=headers)
         if res.status_code == 200:
             messages = res.json()
