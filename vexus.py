@@ -46,11 +46,11 @@ def get_profile(nickname):
         if res.status_code == 200 and res.json():
             return res.json()[0]
     except: pass
-    return None
+    return {}
 
 # --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.2 — Вход")
+    st.title("💬 Vexus v4.3 — Вход")
     
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
@@ -89,17 +89,15 @@ if not st.session_state.nickname:
 
 # --- ГЛАВНЫЙ ИНТЕРФЕЙС VEXUS ---
 else:
-    my_prof = get_profile(st.session_state.nickname) or {}
+    my_prof = get_profile(st.session_state.nickname)
     
     with st.sidebar:
         st.title("💬 Vexus")
         
         if my_prof.get("banner_b64"):
-            try: st.image(base64.b64decode(my_prof["banner_b64"]), use_container_width=True)
-            except: pass
+            st.image(base64.b64decode(my_prof["banner_b64"]), use_container_width=True)
         if my_prof.get("avatar_b64"):
-            try: st.image(base64.b64decode(my_prof["avatar_b64"]), width=80)
-            except: pass
+            st.image(base64.b64decode(my_prof["avatar_b64"]), width=80)
             
         st.subheader(f"👤 @{st.session_state.nickname}")
         st.caption(f"Status: {my_prof.get('status_text', 'No status')}")
@@ -160,12 +158,11 @@ else:
     else:
         if "🔒-" in st.session_state.active_chat:
             st.subheader(f"👤 Приватный диалог с @{search_user}")
-            kent_prof = get_profile(search_user) or {}
-            if kent_prof:
-                st.caption(f"ℹ️ Статус кента: {kent_prof.get('status_text', 'Нет статуса')}")
-                if kent_prof.get("avatar_b64"):
-                    try: st.image(base64.b64decode(kent_prof["avatar_b64"]), width=40)
-                    except: pass
+            kent_prof = get_profile(search_user)
+            if kent_prof.get("status_text"):
+                st.caption(f"ℹ️ Статус кента: {kent_prof.get('status_text')}")
+            if kent_prof.get("avatar_b64"):
+                st.image(base64.b64decode(kent_prof["avatar_b64"]), width=40)
         else:
             st.subheader("🌍 Общая лента сообщений Vexus")
 
@@ -207,11 +204,14 @@ else:
         try:
             res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30", headers=headers)
             if res.status_code == 200:
-                filtered = [m for m in res.json() if m.get("sender_room", "Общий чат") == st.session_state.active_chat]
-                
-                for msg in reversed(filtered):
-                    d_text = msg.get('text', '')
-                    d_img = msg.get('image_url', '')
+                messages = res.json()
+                for msg in reversed(messages):
+                    if msg.get("sender_room", "Общий чат") == st.session_state.active_chat:
+                        d_text = msg.get('text', '')
+                        d_img = msg.get('image_url', '')
 
-                    if "🔒-" in st.session_state.active_chat:
-                        d_text = decrypt_text(d_text, st.session_state.room_password)
+                        if "🔒-" in st.session_state.active_chat:
+                            d_text = decrypt_text(d_text, st.session_state.room_password)
+                            d_img = decrypt_text(d_img, st.session_state.room_password)
+
+                        is_me = msg['sender'] == st.session_state.nickname
