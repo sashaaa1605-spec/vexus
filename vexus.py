@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 # --- НАСТРОЙКИ SUPABASE ---
 URL = "https://dqpdfreewxzefsaejmob.supabase.co"
 KEY = "sb_publishable_XBWFiWdA9Eg2msn3T04XkQ_oKX69lpG"
+
 # --- ШИФРОВАНИЕ ---
 def generate_key(password: str) -> bytes:
     kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=b'salt_123', iterations=100000)
@@ -43,13 +44,13 @@ def get_profile(nickname):
     try:
         res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
         if res.status_code == 200 and res.json():
-            return res.json()[0]
+            return res.json()[0] # Берем первый элемент из списка
     except: pass
     return None
 
 # --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.0 — Вход")
+    st.title("💬 Vexus v4.1 — Вход")
     
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
@@ -61,17 +62,15 @@ if not st.session_state.nickname:
         elif "@" not in email_input:
             st.error("Введите корректный Gmail адрес!")
         else:
-            # Проверяем, существует ли уже профиль
             try:
                 res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
                 res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
                 
                 if res_email:
-                    # Почта есть, проверяем совпадает ли ник
                     if res_email[0]['nickname'] == nick_input:
                         st.session_state.user_email = email_input
                         st.session_state.nickname = nick_input
-                        st.success("Успешный вход!")
+                        st.success("Успешный html_вход!")
                         st.rerun()
                     else:
                         st.error("Этот Gmail уже привязан к другому никнейму!")
@@ -79,7 +78,6 @@ if not st.session_state.nickname:
                     if res_nick:
                         st.error("Этот никнейм уже занят!")
                     else:
-                        # Создаем новый аккаунт
                         new_user = {"email": email_input, "nickname": nick_input}
                         requests.post(f"{URL}/rest/v1/profiles", headers=headers, json=new_user)
                         st.session_state.user_email = email_input
@@ -96,17 +94,19 @@ else:
     with st.sidebar:
         st.title("💬 Vexus")
         
-        # Рендеринг кастомного профиля в сайдбаре
         if my_prof.get("banner_b64"):
-            st.image(base64.b64decode(my_prof["banner_b64"]), use_container_width=True)
+            try: st.image(base64.b64decode(my_prof["banner_b64"]), use_container_width=True)
+            except: pass
         if my_prof.get("avatar_b64"):
-            st.image(base64.b64decode(my_prof["avatar_b64"]), width=80)
+            try: st.image(base64.b64decode(my_prof["avatar_b64"]), width=80)
+            except: pass
             
         st.subheader(f"👤 @{st.session_state.nickname}")
         st.caption(f"Status: {my_prof.get('status_text', 'No status')}")
         
         if st.button("⚙️ Настроить профиль", use_container_width=True):
             st.session_state.edit_profile = not st.session_state.edit_profile
+            st.rerun()
             
         theme_toggle = st.toggle("🌙 Темная тема", value=(st.session_state.theme == "dark"))
         st.session_state.theme = "dark" if theme_toggle else "light"
@@ -158,18 +158,17 @@ else:
 
     # --- ОКНО ЧАТА ---
     else:
-        # Если мы в приватном чате, покажем профиль кента вверху чата!
         if "🔒-" in st.session_state.active_chat:
             st.subheader(f"👤 Приватный диалог с @{search_user}")
             kent_prof = get_profile(search_user)
             if kent_prof:
                 st.caption(f"ℹ️ Статус кента: {kent_prof.get('status_text', 'Нет статуса')}")
                 if kent_prof.get("avatar_b64"):
-                    st.image(base64.b64decode(kent_prof["avatar_b64"]), width=40)
+                    try: st.image(base64.b64decode(kent_prof["avatar_b64"]), width=40)
+                    except: pass
         else:
             st.subheader("🌍 Общая лента сообщений Vexus")
 
-        # Функция отправки сообщения
         def send_msg():
             msg_text = st.session_state.msg_input.strip()
             img_file = st.session_state.img_uploader
@@ -213,3 +212,6 @@ else:
                 for msg in reversed(filtered):
                     d_text = msg.get('text', '')
                     d_img = msg.get('image_url', '')
+
+                    if "🔒-" in st.session_state.active_chat:
+                        d_text = decrypt_text(d_text, st.session_state.room_password)
