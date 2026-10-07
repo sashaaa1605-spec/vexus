@@ -39,26 +39,28 @@ bg = "#182533" if st.session_state.theme == "dark" else "#ffffff"
 tc = "#ffffff" if st.session_state.theme == "dark" else "#000000"
 st.markdown(f"<style>.stApp {{background-color: {bg}; color: {tc};}}</style>", unsafe_allow_html=True)
 
-# --- БЫСТРАЯ ФУНКЦИЯ ПРОФИЛЕЙ (БЕЗ ТОРМОЗОВ) ---
+# --- ФУНКЦИИ ПРОФИЛЕЙ ---
 def get_profile(nickname):
-    res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
-    if res.status_code == 200:
-        data = res.json()
-        if data and len(data) > 0: return data[0] if isinstance(data, list) else data
+    try:
+        res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
+        if res.status_code == 200:
+            data = res.json()
+            if data and len(data) > 0: return data if isinstance(data, list) else data
+    except: pass
     return {}
 
-# --- ПОЛУЧЕНИЕ ВСЕХ ПРОФИЛЕЙ ОДНИМ ЗАПРОСОМ (ДЛЯ СКОРОСТИ) ---
+# --- БЕЗОПАСНОЕ ОПТИМИЗИРОВАННОЕ ПОЛУЧЕНИЕ ВСЕХ ПРОФИЛЕЙ ---
 def get_all_profiles_cached():
     try:
-        res = requests.get(f"{URL}/rest/v1/profiles?select=nickname,avatar_b64", headers=headers)
+        res = requests.get(f"{URL}/rest/v1/profiles", headers=headers)
         if res.status_code == 200:
-            return {p['nickname']: p.get('avatar_b64', '') for p in res.json()}
+            return {p['nickname']: p.get('avatar_b64', '') for p in res.json() if 'nickname' in p}
     except: pass
     return {}
 
 # --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.9 — Вход")
+    st.title("💬 Vexus v4.91 — Вход")
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
     nick_input = st.text_input("Придумайте ваш никнейм в Vexus:", max_chars=15).strip().lower()
@@ -70,13 +72,13 @@ if not st.session_state.nickname:
             try:
                 res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
                 res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
-                existing_user = res_email[0] if (isinstance(res_email, list) and len(res_email) > 0) else None
+                existing_user = res_email if (isinstance(res_email, list) and len(res_email) > 0) else None
                 
                 if existing_user:
                     if existing_user.get('nickname') == nick_input:
                         st.session_state.user_email = email_input
                         st.session_state.nickname = nick_input
-                        st.success("Успешный вход!")
+                        st.success("Успешный html_вход!")
                         st.rerun()
                     else: st.error("Этот Gmail уже привязан к другому никнейму!")
                 else:
@@ -153,7 +155,7 @@ else:
         st.subheader("🌍 Общая лента сообщений Vexus" if not is_private else f"👤 Приватный диалог с @{search_user}")
         if is_private:
             kent_prof = get_profile(search_user)
-            if kent_prof.get("status_text"): st.caption(f"ℹ️ Статус кента: {kent_prof.get('status_text')}")
+            if kent_prof.get("status_text"): st.caption(f"ℹ️ Status: {kent_prof.get('status_text')}")
             if kent_prof.get("avatar_b64"): st.image(base64.b64decode(kent_prof["avatar_b64"]), width=40)
 
         def send_msg():
@@ -174,10 +176,10 @@ else:
 
         st.divider()
 
-        # ЗАГРУЖАЕМ ВСЕ ПРОФИЛИ ОДНИМ ПАКЕТОМ (Убирает лаги)
+        # Получаем кэш аватаров в безопасном режиме
         avatar_cache = get_all_profiles_cached()
 
-        # Отображение сообщений — ТЕПЕРЬ СУПЕРБЫСТРОЕ
+        # Отображение сообщений
         res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=35", headers=headers)
         if res.status_code == 200:
             for msg in reversed(res.json()):
@@ -186,4 +188,6 @@ else:
                     d_img = decrypt_text(msg.get('image_url', ''), st.session_state.room_password) if is_private else msg.get('image_url', '')
                     is_me = (msg['sender'] == st.session_state.nickname)
                     
-                    # Берем аватарку из быстрой памяти компьютера (кеша), а не из интернета
+                    ava_b64 = avatar_cache.get(msg['sender'], '')
+                    
+                    with st.chat_message("user" if is_me else "assistant"):
