@@ -41,16 +41,18 @@ st.markdown(f"<style>.stApp {{background-color: {bg}; color: {tc};}}</style>", u
 
 # --- ФУНКЦИИ ПРОФИЛЕЙ ---
 def get_profile(nickname):
-    res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
-    if res.status_code == 200:
-        data = res.json()
-        if data and len(data) > 0:
-            return data[0] if isinstance(data, list) else data
+    try:
+        res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
+        if res.status_code == 200:
+            data = res.json()
+            if data and len(data) > 0:
+                return data[0] # Исправлено: берем первый элемент из списка!
+    except: pass
     return {}
 
 # --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.6 — Вход")
+    st.title("💬 Vexus v4.7 — Вход")
     
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
@@ -62,30 +64,33 @@ if not st.session_state.nickname:
         elif "@" not in email_input:
             st.error("Введите корректный Gmail адрес!")
         else:
-            res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
-            res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
-            
-            # Проверяем список профилей
-            existing_user = res_email[0] if (isinstance(res_email, list) and len(res_email) > 0) else None
-            
-            if existing_user:
-                if existing_user.get('nickname') == nick_input:
-                    st.session_state.user_email = email_input
-                    st.session_state.nickname = nick_input
-                    st.success("Успешный вход!")
-                    st.rerun()
+            try:
+                res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
+                res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
+                
+                # Исправлено: корректно извлекаем профиль, если он вернулся как список
+                existing_user = res_email[0] if (isinstance(res_email, list) and len(res_email) > 0) else None
+                
+                if existing_user:
+                    if existing_user.get('nickname') == nick_input:
+                        st.session_state.user_email = email_input
+                        st.session_state.nickname = nick_input
+                        st.success("Успешный вход!")
+                        st.rerun()
+                    else:
+                        st.error("Этот Gmail уже привязан к другому никнейму!")
                 else:
-                    st.error("Этот Gmail уже привязан к другому никнейму!")
-            else:
-                if res_nick and len(res_nick) > 0:
-                    st.error("Этот никнейм уже занят!")
-                else:
-                    new_user = {"email": email_input, "nickname": nick_input}
-                    requests.post(f"{URL}/rest/v1/profiles", headers=headers, json=new_user)
-                    st.session_state.user_email = email_input
-                    st.session_state.nickname = nick_input
-                    st.success("Регистрация успешна!")
-                    st.rerun()
+                    if res_nick and len(res_nick) > 0:
+                        st.error("Этот никнейм уже занят!")
+                    else:
+                        new_user = {"email": email_input, "nickname": nick_input}
+                        requests.post(f"{URL}/rest/v1/profiles", headers=headers, json=new_user)
+                        st.session_state.user_email = email_input
+                        st.session_state.nickname = nick_input
+                        st.success("Регистрация успешна!")
+                        st.rerun()
+            except Exception as e:
+                st.error(f"Ошибка авторизации: {e}")
 
 # --- ГЛАВНЫЙ ИНТЕРФЕЙС VEXUS ---
 else:
@@ -138,7 +143,7 @@ else:
     # --- ОКНО НАСТРОЙКИ ПРОФИЛЯ ---
     if st.session_state.edit_profile:
         st.subheader("⚙️ Кастомизация профиля Vexus")
-        new_status = st.text_input("Твой статус:", value=my_prof.get("status_text", ""))
+        new_status = st.text_input("Твой status:", value=my_prof.get("status_text", ""))
         new_ava = st.file_uploader("Загрузить аватарку (PNG/JPG):", type=["png", "jpg"])
         new_banner = st.file_uploader("Загрузить баннер профиля:", type=["png", "jpg"])
         
@@ -198,7 +203,7 @@ else:
 
         st.divider()
 
-        # Отображение сообщений — БЕЗ опасных многострочных условий
+        # Отображение сообщений
         res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30", headers=headers)
         if res.status_code == 200:
             messages = res.json()
@@ -208,9 +213,3 @@ else:
                     d_img = msg.get('image_url', '')
 
                     if "🔒-" in st.session_state.active_chat:
-                        d_text = decrypt_text(d_text, st.session_state.room_password)
-                        d_img = decrypt_text(d_img, st.session_state.room_password)
-
-                    is_me = (msg['sender'] == st.session_state.nickname)
-                    author_prof = get_profile(msg['sender'])
-                    
