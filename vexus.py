@@ -55,7 +55,7 @@ else:
     st.divider()
 
     try:
-        response = supabase.table("messages").select("*").order("id", descending=True).limit(50).execute()
+        response = supabase.table("messages").select("*").order("id", desc=True).limit(50).execute()
         messages = response.data
         
         if messages:
