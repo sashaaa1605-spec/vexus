@@ -22,7 +22,10 @@ def encrypt_text(text: str, password: str) -> str:
 
 def decrypt_text(cipher_text: str, password: str) -> str:
     if not cipher_text: return ""
-    try: return Fernet(generate_key(password)).decrypt(cipher_text.encode()).decode()
+    try:
+        if cipher_text.startswith("gAAAAA"):
+            return Fernet(generate_key(password)).decrypt(cipher_text.encode()).decode()
+        return cipher_text
     except: return "[Зашифровано — неверный ключ]"
 
 # --- СЕССИЯ И ДИЗАЙН ---
@@ -35,17 +38,46 @@ if "edit_profile" not in st.session_state: st.session_state.edit_profile = False
 
 headers = {"apikey": KEY, "Authorization": f"Bearer {KEY}", "Content-Type": "application/json", "Prefer": "return=minimal"}
 
+# Красивые стили для бабблов сообщений (как в ТГ)
 bg = "#182533" if st.session_state.theme == "dark" else "#ffffff"
 tc = "#ffffff" if st.session_state.theme == "dark" else "#000000"
-st.markdown(f"<style>.stApp {{background-color: {bg}; color: {tc};}}</style>", unsafe_allow_html=True)
+msg_self = "#2b5278" if st.session_state.theme == "dark" else "#effdde"
+msg_other = "#202b36" if st.session_state.theme == "dark" else "#f1f5f9"
+
+st.markdown(f"""
+    <style>
+    .stApp {{background-color: {bg}; color: {tc};}}
+    .msg-box {{
+        display: flex;
+        align-items: flex-start;
+        margin: 8px 0;
+        padding: 8px 12px;
+        border-radius: 12px;
+        max-width: 85%;
+        font-family: sans-serif;
+    }}
+    .msg-left {{ background-color: {msg_other}; margin-right: auto; }}
+    .msg-right {{ background-color: {msg_self}; margin-left: auto; flex-direction: row-reverse; }}
+    .msg-avatar {{
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin: 0 8px;
+    }}
+    .msg-body {{ display: flex; flex-direction: column; }}
+    .msg-author {{ font-weight: bold; font-size: 0.85rem; color: #5288c1; margin-bottom: 2px; }}
+    .msg-text {{ font-size: 0.95rem; line-height: 1.3; }}
+    .chat-img {{ max-width: 100%; border-radius: 8px; margin-top: 5px; display: block; }}
+    </style>
+""", unsafe_allow_html=True)
 
 # --- ФУНКЦИИ ПРОФИЛЕЙ ---
 def get_profile(nickname):
     try:
         res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
-        if res.status_code == 200:
-            data = res.json()
-            if data and len(data) > 0: return data if isinstance(data, list) else data
+        if res.status_code == 200 and res.json():
+            return res.json()
     except: pass
     return {}
 
@@ -57,10 +89,9 @@ def get_all_profiles_cached():
     except: pass
     return {}
 
-# --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
+# --- ОКНО ВХОДА ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.92 — Вход")
-    st.markdown("### 🔑 Авторизация через Gmail / Почту")
+    st.title("💬 Vexus — Вход")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
     nick_input = st.text_input("Придумайте ваш никнейм в Vexus:", max_chars=15).strip().lower()
     
@@ -87,7 +118,7 @@ if not st.session_state.nickname:
                         requests.post(f"{URL}/rest/v1/profiles", headers=headers, json=new_user)
                         st.session_state.user_email = email_input
                         st.session_state.nickname = nick_input
-                        st.success("Registration Успешна!")
+                        st.success("Регистрация Успешна!")
                         st.rerun()
             except Exception as e: st.error(f"Ошибка авторизации: {e}")
 
@@ -151,19 +182,18 @@ else:
     # --- ОКНО ЧАТА ---
     else:
         is_private = "🔒-" in st.session_state.active_chat
-        st.subheader("🌍 Общая лента сообщений Vexus" if not is_private else f"👤 Приватный диалог с @{search_user}")
+        st.subheader("🌍 Общая лента Vexus" if not is_private else f"👤 Приватный диалог с @{search_user}")
         if is_private:
             kent_prof = get_profile(search_user)
             if kent_prof.get("status_text"): st.caption(f"ℹ️ Status: {kent_prof.get('status_text')}")
-            if kent_prof.get("avatar_b64"): st.image(base64.b64decode(kent_prof["avatar_b64"]), width=40)
 
         def send_msg():
             msg_text = st.session_state.msg_input.strip()
             img_file = st.session_state.img_uploader
             img_b64 = base64.b64encode(img_file.getvalue()).decode() if img_file is not None else ""
             if msg_text or img_b64:
-                f_text = encrypt_text(msg_text, st.session_state.room_password) if (is_private and msg_text) else msg_text
-                f_img = encrypt_text(img_b64, st.session_state.room_password) if (is_private and img_b64) else img_b64
+                f_text = encrypt_text(msg_text, st.session_state.room_password) if is_private else msg_text
+                f_img = encrypt_text(img_b64, st.session_state.room_password) if is_private else img_b64
                 data = {"sender": st.session_state.nickname, "text": f_text, "image_url": f_img, "sender_room": st.session_state.active_chat}
                 requests.post(f"{URL}/rest/v1/messages", headers=headers, json=data)
                 st.session_state.msg_input = ""
@@ -175,17 +205,7 @@ else:
 
         st.divider()
 
+        # Кэш аватарок для быстрой прогрузки
         avatar_cache = get_all_profiles_cached()
 
-        # Отображение сообщений — СУПЕР ЛИНЕЙНЫЙ И БЕЗОПАСНЫЙ ВЫВОД
-        res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=35", headers=headers)
-        if res.status_code == 200:
-            for msg in reversed(res.json()):
-                if msg.get("sender_room", "Общий чат") == st.session_state.active_chat:
-                    d_text = decrypt_text(msg.get('text', ''), st.session_state.room_password) if is_private else msg.get('text', '')
-                    d_img = decrypt_text(msg.get('image_url', ''), st.session_state.room_password) if is_private else msg.get('image_url', '')
-                    is_me = (msg['sender'] == st.session_state.nickname)
-                    ava_b64 = avatar_cache.get(msg['sender'], '')
-                    
-                    # Простой вывод разметки
-                    st.markdown(f"### 💬 @{msg['sender']}" if is_me else f"👤 @{msg['sender']}")
+        # Рендеринг красивых сообщений
