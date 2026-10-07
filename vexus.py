@@ -43,7 +43,7 @@ st.markdown(f"<style>.stApp {{background-color: {bg}; color: {tc};}}</style>", u
 
 # --- ОКНО ВХОДА ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v3.3")
+    st.title("💬 Vexus v3.4")
     nick_input = st.text_input("Введите ваш никнейм для входа в Vexus:", max_chars=15)
     if st.button("Войти"):
         if nick_input.strip():
@@ -52,7 +52,7 @@ if not st.session_state.nickname:
         else:
             st.error("Никнейм не может быть пустым!")
 
-# --- ГЛАВНЫЙ ИНТЕРФЕЙС ---
+# --- ГЛАВНЫЙ ИНТЕРФЕЙС VEXUS ---
 else:
     with st.sidebar:
         st.title("💬 Vexus")
@@ -61,17 +61,40 @@ else:
         st.session_state.theme = "dark" if theme_toggle else "light"
         
         st.divider()
-        st.markdown("### 🔑 Шифрование (для приватности)")
-        st.session_state.room_password = st.text_input("Пароль чата:", value=st.session_state.room_password, type="password")
-        st.caption("Если пишете секретные сообщения, у вас с другом должен быть одинаковый пароль тут.")
+        
+        # --- ВОТ ТУТ НАШ КРУТОЙ ПОИСК ---
+        st.markdown("### 🔍 Поиск кентов в Vexus")
+        search_user = st.text_input("Введи ник кента для чата:", placeholder="например: ivan").strip().lower()
+        
+        chats_list = ["Общий чат"]
+        # Если ввели ник друга, создаем для вас секретную уникальную комнату
+        if search_user and search_user != st.session_state.nickname:
+            private_room_id = "🔒-" + "-".join(sorted([st.session_state.nickname, search_user]))
+            chats_list.append(private_room_id)
+            
+        st.markdown("### 💬 Мои Диалоги")
+        for chat in chats_list:
+            name = "🌍 Общий чат" if chat == "Общий чат" else f"👤 @{search_user} (Приватный)"
+            # Выделяем активный чат кнопкой
+            if st.button(name, key=f"b_{chat}", use_container_width=True):
+                st.session_state.active_chat = chat
+                st.rerun()
+                
+        st.divider()
+        if "🔒-" in st.session_state.active_chat:
+            st.markdown("### 🔑 Шифрование")
+            st.session_state.room_password = st.text_input("Пароль чата:", value=st.session_state.room_password, type="password")
+            st.caption("Пароли у вас с кентом должны совпадать!")
 
         if st.button("Выйти из аккаунта", use_container_width=True):
             st.session_state.nickname = ""
             st.rerun()
 
-    st.subheader("💬 Общая лента сообщений Vexus")
+    # Показываем, в каком мы сейчас чате
+    st.subheader("🌍 Общий чат" if "🔒-" not in st.session_state.active_chat else f"👤 Приватный диалог Vexus")
+    st.caption(f"Текущая комната: {st.session_state.active_chat}")
 
-    # Функция отправки
+    # Функция отправки сообщения
     def send_msg():
         msg_text = st.session_state.msg_input.strip()
         img_file = st.session_state.img_uploader
@@ -82,7 +105,8 @@ else:
 
         if msg_text or img_b64:
             try:
-                if st.session_state.room_password != "default_secure_pass":
+                # В приватном чате шифруем всё перед отправкой
+                if "🔒-" in st.session_state.active_chat:
                     f_text = encrypt_text(msg_text, st.session_state.room_password) if msg_text else ""
                     f_img = encrypt_text(img_b64, st.session_state.room_password) if img_b64 else ""
                 else:
@@ -92,7 +116,8 @@ else:
                 data = {
                     "sender": st.session_state.nickname, 
                     "text": f_text, 
-                    "image_url": f_img
+                    "image_url": f_img,
+                    "sender_room": st.session_state.active_chat # Привязываем к ID комнаты
                 }
                 requests.post(f"{URL}/rest/v1/messages", headers=headers, json=data)
                 st.session_state.msg_input = ""
@@ -110,26 +135,32 @@ else:
     try:
         res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=40", headers=headers)
         if res.status_code == 200:
+            # Фильтруем сообщения строго для активной комнаты
             messages = res.json()
+            filtered = [m for m in messages if m.get("sender_room", "Общий чат") == st.session_state.active_chat]
             
-            for msg in reversed(messages):
-                d_text = msg.get('text', '')
-                d_img = msg.get('image_url', '')
+            if filtered:
+                for msg in reversed(filtered):
+                    d_text = msg.get('text', '')
+                    d_img = msg.get('image_url', '')
 
-                if d_text.startswith("gAAAAA") or (d_img and d_img.startswith("gAAAAA")):
-                    d_text = decrypt_text(d_text, st.session_state.room_password)
-                    d_img = decrypt_text(d_img, st.session_state.room_password)
+                    # Если чат приватный — расшифровываем
+                    if "🔒-" in st.session_state.active_chat:
+                        d_text = decrypt_text(d_text, st.session_state.room_password)
+                        d_img = decrypt_text(d_img, st.session_state.room_password)
 
-                is_me = msg['sender'] == st.session_state.nickname
-                with st.chat_message("user" if is_me else "assistant"):
-                    st.markdown(f"**@{msg['sender']}**")
-                    if d_text: 
-                        st.write(d_text)
-                    if d_img and "[Ошибка]" not in d_img and "[Зашифровано" not in d_img:
-                        try:
-                            st.image(base64.b64decode(d_img.encode()))
-                        except:
-                            pass
+                    is_me = msg['sender'] == st.session_state.nickname
+                    with st.chat_message("user" if is_me else "assistant"):
+                        st.markdown(f"**@{msg['sender']}**")
+                        if d_text: 
+                            st.write(d_text)
+                        if d_img and "[Ошибка]" not in d_img and "[Зашифровано" not in d_img:
+                            try:
+                                st.image(base64.b64decode(d_img.encode()))
+                            except:
+                                pass
+            else:
+                st.info("Здесь пока нет сообщений. Напишите что-нибудь!")
         else:
             st.error("Ошибка подключения к базе данных.")
     except Exception as e:
