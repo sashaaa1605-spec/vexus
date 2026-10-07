@@ -45,30 +45,24 @@ def get_profile(nickname):
         res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
         if res.status_code == 200:
             data = res.json()
-            if data and len(data) > 0:
-                return data[0] # Исправлено: берем первый элемент из списка!
+            if data and len(data) > 0: return data[0]
     except: pass
     return {}
 
 # --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.7 — Вход")
-    
+    st.title("💬 Vexus v4.8 — Вход")
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
     nick_input = st.text_input("Придумайте ваш никнейм в Vexus (только буквы/цифры):", max_chars=15).strip().lower()
     
     if st.button("Войти / Зарегистрироваться", use_container_width=True):
-        if not email_input or not nick_input:
-            st.error("Заполните все поля!")
-        elif "@" not in email_input:
-            st.error("Введите корректный Gmail адрес!")
+        if not email_input or not nick_input: st.error("Заполните все поля!")
+        elif "@" not in email_input: st.error("Введите корректный Gmail адрес!")
         else:
             try:
                 res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
                 res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
-                
-                # Исправлено: корректно извлекаем профиль, если он вернулся как список
                 existing_user = res_email[0] if (isinstance(res_email, list) and len(res_email) > 0) else None
                 
                 if existing_user:
@@ -77,11 +71,9 @@ if not st.session_state.nickname:
                         st.session_state.nickname = nick_input
                         st.success("Успешный вход!")
                         st.rerun()
-                    else:
-                        st.error("Этот Gmail уже привязан к другому никнейму!")
+                    else: st.error("Этот Gmail уже привязан к другому никнейму!")
                 else:
-                    if res_nick and len(res_nick) > 0:
-                        st.error("Этот никнейм уже занят!")
+                    if res_nick and len(res_nick) > 0: st.error("Этот никнейм уже занят!")
                     else:
                         new_user = {"email": email_input, "nickname": nick_input}
                         requests.post(f"{URL}/rest/v1/profiles", headers=headers, json=new_user)
@@ -89,8 +81,7 @@ if not st.session_state.nickname:
                         st.session_state.nickname = nick_input
                         st.success("Регистрация успешна!")
                         st.rerun()
-            except Exception as e:
-                st.error(f"Ошибка авторизации: {e}")
+            except Exception as e: st.error(f"Ошибка авторизации: {e}")
 
 # --- ГЛАВНЫЙ ИНТЕРФЕЙС VEXUS ---
 else:
@@ -98,12 +89,8 @@ else:
     
     with st.sidebar:
         st.title("💬 Vexus")
-        
-        if my_prof.get("banner_b64"):
-            st.image(base64.b64decode(my_prof["banner_b64"]), use_container_width=True)
-        if my_prof.get("avatar_b64"):
-            st.image(base64.b64decode(my_prof["avatar_b64"]), width=80)
-            
+        if my_prof.get("banner_b64"): st.image(base64.b64decode(my_prof["banner_b64"]), use_container_width=True)
+        if my_prof.get("avatar_b64"): st.image(base64.b64decode(my_prof["avatar_b64"]), width=80)
         st.subheader(f"👤 @{st.session_state.nickname}")
         st.caption(f"Status: {my_prof.get('status_text', 'No status')}")
         
@@ -113,15 +100,13 @@ else:
             
         theme_toggle = st.toggle("🌙 Темная тема", value=(st.session_state.theme == "dark"))
         st.session_state.theme = "dark" if theme_toggle else "light"
-        
         st.divider()
+        
         st.markdown("### 🔍 Поиск кентов")
         search_user = st.text_input("Введи ник кента:", placeholder="например: ivan").strip().lower()
-        
         chats_list = ["Общий чат"]
         if search_user and search_user != st.session_state.nickname:
-            private_room_id = "🔒-" + "-".join(sorted([st.session_state.nickname, search_user]))
-            chats_list.append(private_room_id)
+            chats_list.append("🔒-" + "-".join(sorted([st.session_state.nickname, search_user])))
             
         st.markdown("### 💬 Мои Диалоги")
         for chat in chats_list:
@@ -134,7 +119,6 @@ else:
         if "🔒-" in st.session_state.active_chat:
             st.markdown("### 🔑 Шифрование")
             st.session_state.room_password = st.text_input("Пароль чата:", value=st.session_state.room_password, type="password")
-
         if st.button("Выйти из аккаунта", use_container_width=True):
             st.session_state.nickname = ""
             st.session_state.user_email = ""
@@ -143,17 +127,14 @@ else:
     # --- ОКНО НАСТРОЙКИ ПРОФИЛЯ ---
     if st.session_state.edit_profile:
         st.subheader("⚙️ Кастомизация профиля Vexus")
-        new_status = st.text_input("Твой status:", value=my_prof.get("status_text", ""))
+        new_status = st.text_input("Твой статус:", value=my_prof.get("status_text", ""))
         new_ava = st.file_uploader("Загрузить аватарку (PNG/JPG):", type=["png", "jpg"])
         new_banner = st.file_uploader("Загрузить баннер профиля:", type=["png", "jpg"])
         
         if st.button("Сохранить изменения профиля"):
             up_data = {"status_text": new_status}
-            if new_ava:
-                up_data["avatar_b64"] = base64.b64encode(new_ava.getvalue()).decode()
-            if new_banner:
-                up_data["banner_b64"] = base64.b64encode(new_banner.getvalue()).decode()
-                
+            if new_ava: up_data["avatar_b64"] = base64.b64encode(new_ava.getvalue()).decode()
+            if new_banner: up_data["banner_b64"] = base64.b64encode(new_banner.getvalue()).decode()
             requests.patch(f"{URL}/rest/v1/profiles?nickname=eq.{st.session_state.nickname}", headers=headers, json=up_data)
             st.success("Профиль обновлен!")
             st.session_state.edit_profile = False
@@ -161,38 +142,21 @@ else:
 
     # --- ОКНО ЧАТА ---
     else:
-        if "🔒-" in st.session_state.active_chat:
-            st.subheader(f"👤 Приватный диалог с @{search_user}")
+        is_private = "🔒-" in st.session_state.active_chat
+        st.subheader("🌍 Общая лента сообщений Vexus" if not is_private else f"👤 Приватный диалог с @{search_user}")
+        if is_private:
             kent_prof = get_profile(search_user)
-            if kent_prof.get("status_text"):
-                st.caption(f"ℹ️ Статус кента: {kent_prof.get('status_text')}")
-            if kent_prof.get("avatar_b64"):
-                st.image(base64.b64decode(kent_prof["avatar_b64"]), width=40)
-        else:
-            st.subheader("🌍 Общая лента сообщений Vexus")
+            if kent_prof.get("status_text"): st.caption(f"ℹ️ Статус кента: {kent_prof.get('status_text')}")
+            if kent_prof.get("avatar_b64"): st.image(base64.b64decode(kent_prof["avatar_b64"]), width=40)
 
         def send_msg():
             msg_text = st.session_state.msg_input.strip()
             img_file = st.session_state.img_uploader
-            img_b64 = ""
-            
-            if img_file is not None:
-                img_b64 = base64.b64encode(img_file.getvalue()).decode()
-
+            img_b64 = base64.b64encode(img_file.getvalue()).decode() if img_file is not None else ""
             if msg_text or img_b64:
-                if "🔒-" in st.session_state.active_chat:
-                    f_text = encrypt_text(msg_text, st.session_state.room_password) if msg_text else ""
-                    f_img = encrypt_text(img_b64, st.session_state.room_password) if img_b64 else ""
-                else:
-                    f_text = msg_text
-                    f_img = img_b64
-                    
-                data = {
-                    "sender": st.session_state.nickname, 
-                    "text": f_text, 
-                    "image_url": f_img,
-                    "sender_room": st.session_state.active_chat
-                }
+                f_text = encrypt_text(msg_text, st.session_state.room_password) if (is_private and msg_text) else msg_text
+                f_img = encrypt_text(img_b64, st.session_state.room_password) if (is_private and img_b64) else img_b64
+                data = {"sender": st.session_state.nickname, "text": f_text, "image_url": f_img, "sender_room": st.session_state.active_chat}
                 requests.post(f"{URL}/rest/v1/messages", headers=headers, json=data)
                 st.session_state.msg_input = ""
 
@@ -203,13 +167,20 @@ else:
 
         st.divider()
 
-        # Отображение сообщений
+        # Отображение сообщений — ПОЛНОСТЬЮ БЕЗОПАСНАЯ ЛИНЕЙНАЯ СТРУКТУРА
         res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30", headers=headers)
         if res.status_code == 200:
-            messages = res.json()
-            for msg in reversed(messages):
+            for msg in reversed(res.json()):
                 if msg.get("sender_room", "Общий чат") == st.session_state.active_chat:
-                    d_text = msg.get('text', '')
-                    d_img = msg.get('image_url', '')
+                    d_text = decrypt_text(msg.get('text', ''), st.session_state.room_password) if is_private else msg.get('text', '')
+                    d_img = decrypt_text(msg.get('image_url', ''), st.session_state.room_password) if is_private else msg.get('image_url', '')
+                    is_me = (msg['sender'] == st.session_state.nickname)
+                    author_prof = get_profile(msg['sender'])
+                    
+                    with st.chat_message("user" if is_me else "assistant"):
+                        if author_prof.get("avatar_b64"): st.image(base64.b64decode(author_prof["avatar_b64"]), width=30)
+                        st.markdown(f"**@{msg['sender']}**")
+                        if d_text: st.write(d_text)
+                        if d_img and "[Ошибка]" not in d_img and "[Зашифровано" not in d_img: st.image(base64.b64decode(d_img.encode()))
+        else: st.error("Ошибка подключения к базе")
 
-                    if "🔒-" in st.session_state.active_chat:
