@@ -44,13 +44,13 @@ def get_profile(nickname):
     try:
         res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
         if res.status_code == 200 and res.json():
-            return res.json()[0] # Берем первый элемент из списка
+            return res.json()[0]
     except: pass
     return None
 
 # --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.1 — Вход")
+    st.title("💬 Vexus v4.2 — Вход")
     
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
@@ -70,7 +70,7 @@ if not st.session_state.nickname:
                     if res_email[0]['nickname'] == nick_input:
                         st.session_state.user_email = email_input
                         st.session_state.nickname = nick_input
-                        st.success("Успешный html_вход!")
+                        st.success("Успешный вход!")
                         st.rerun()
                     else:
                         st.error("Этот Gmail уже привязан к другому никнейму!")
@@ -160,7 +160,7 @@ else:
     else:
         if "🔒-" in st.session_state.active_chat:
             st.subheader(f"👤 Приватный диалог с @{search_user}")
-            kent_prof = get_profile(search_user)
+            kent_prof = get_profile(search_user) or {}
             if kent_prof:
                 st.caption(f"ℹ️ Статус кента: {kent_prof.get('status_text', 'Нет статуса')}")
                 if kent_prof.get("avatar_b64"):
@@ -214,4 +214,4 @@ else:
                     d_img = msg.get('image_url', '')
 
                     if "🔒-" in st.session_state.active_chat:
-                        d_text = decrypt_text(d_text, st.session_state.room_password);
+                        d_text = decrypt_text(d_text, st.session_state.room_password)
