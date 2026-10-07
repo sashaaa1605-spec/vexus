@@ -12,28 +12,28 @@ def get_supabase_client():
 
 supabase = get_supabase_client()
 
-st.set_page_config(page_title="Наш Web Месенджер", page_icon="💬", layout="centered")
-st.title("💬 Наш Месенджер")
+st.set_page_config(page_title="vexus Web", page_icon="💬", layout="centered")
+st.title("💬 vexus")
 
 if "nickname" not in st.session_state:
     st.session_state.nickname = ""
 
 # --- ВІКНО ВХОДУ ---
 if not st.session_state.nickname:
-    st.subheader("Введіть ваш нікнейм для входу:")
+    st.subheader("введите ваш никнейм:")
     nick_input = st.text_input("Мій нік...", max_chars=15)
     if st.button("Увійти в чат"):
         if nick_input.strip():
             st.session_state.nickname = nick_input.strip()
             st.rerun()
         else:
-            st.error("Нікнейм не може бути порожнім!")
+            st.error("никнейи не может быть пустым")
 
 # --- ВІКНО ЧАТУ ---
 else:
-    st.write(f"Ви зайшли як: **{st.session_state.nickname}**")
+    st.write(f"вы зашли как: **{st.session_state.nickname}**")
     
-    if st.button("Вийти з чату"):
+    if st.button("выйти из  чата"):
         st.session_state.nickname = ""
         st.rerun()
 
@@ -49,7 +49,7 @@ else:
                 st.error(f"Помилка відправки: {e}")
 
     with st.form(key="send_form", clear_on_submit=True):
-        st.text_input("Напишіть повідомлення...", key="msg_input")
+        st.text_input("напишите сообщение", key="msg_input")
         submit_button = st.form_submit_button(label="Надіслати", on_click=send_msg)
 
     st.divider()
