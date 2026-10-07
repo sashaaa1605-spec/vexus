@@ -50,7 +50,7 @@ else:
                 post_url = f"{URL}/rest/v1/messages"
                 data = {"sender": st.session_state.nickname, "text": msg_text}
                 res = requests.post(post_url, headers=headers, json=data)
-                if res.status_code not in
+                if res.status_code not in:
                     st.error(f"Ошибка отправки: {res.text}")
                 else:
                     st.session_state.msg_input = ""
