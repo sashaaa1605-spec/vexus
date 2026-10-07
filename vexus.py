@@ -213,4 +213,4 @@ else:
                     author_prof = get_profile(msg['sender'])
                     
                     with st.chat_message("user" if is_me else "assistant"):
-                        if author_prof.get("avatar_b64")
+                        if author_prof.get("avatar_b64"):
