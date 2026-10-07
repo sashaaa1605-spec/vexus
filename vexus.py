@@ -214,4 +214,4 @@ else:
                     d_img = msg.get('image_url', '')
 
                     if "🔒-" in st.session_state.active_chat:
-                        d_text = decrypt_text(d_text, st.session_state.room_password)
+                        d_text = decrypt_text(d_text, st.session_state.room_password);
