@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import time
 import base64
-from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -10,6 +9,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 # --- НАСТРОЙКИ SUPABASE ---
 URL = "https://dqpdfreewxzefsaejmob.supabase.co"
 KEY = "sb_publishable_XBWFiWdA9Eg2msn3T04XkQ_oKX69lpG"
+
 # --- ШИФРОВАНИЕ ---
 def generate_key(password: str) -> bytes:
     kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=b'salt_123', iterations=100000)
@@ -44,7 +44,7 @@ st.markdown(f"<style>.stApp {{background-color: {bg}; color: {tc};}}</style>", u
 
 # --- ОКНО ВХОДА ---
 if not st.session_state.nickname:
-    st.title("💬 vexus v3.0")
+    st.title("💬 ТГ Мессенджер v3.1")
     nick_input = st.text_input("Введите ваш никнейм для входа:", max_chars=15)
     if st.button("Войти в мессенджер"):
         if nick_input.strip():
@@ -70,7 +70,7 @@ else:
             
         st.markdown("### 💬 Мои Диалоги")
         for chat in chats_list:
-            name = "🌍 Общий чат" if chat == "Общий chat" or chat == "Общий чат" else f"👤 @{search_user} (Приватный)"
+            name = "🌍 Общий чат" if chat == "Общий чат" else f"👤 @{search_user} (Приватный)"
             if st.button(name, key=f"b_{chat}", use_container_width=True):
                 st.session_state.active_chat = chat
                 st.rerun()
@@ -130,10 +130,9 @@ else:
             filtered = [m for m in res.json() if m.get("sender_room", "Общий чат") == st.session_state.active_chat]
             
             for msg in reversed(filtered):
+                # Достаем время в простом текстовом формате без сложных конвертаций
                 try:
-                    t_part = msg['created_at'].split('.')[0].replace('T', ' ')
-                    dt = datetime.strptime(t_part, "%Y-%m-%d %H:%M:%S") + timedelta(hours=3)
-                    f_time = dt.strftime("%H:%M")
+                    f_time = msg['created_at'].split('T')[1][:5] # Просто вырежет "ЧЧ:ММ"
                 except:
                     f_time = "--:--"
 
@@ -144,16 +143,21 @@ else:
                     d_text = msg.get('text', '')
                     d_img = msg.get('image_url', '')
 
-                # Вывод сообщений элементами Streamlit (чтобы избежать багов с HTML)
-                with st.chat_message("user" if msg['sender'] == st.session_state.nickname else "assistant"):
-                    st.write(f"**@{msg['sender']}** в {f_time}")
-                    if d_text: st.write(d_text)
-                    if d_img and "[Зашифровано" not in d_img:
-                        st.image(base64.b64decode(img_b64 if 'img_b64' in locals() else d_img.encode()))
+                # Вывод сообщений элементами Streamlit
+                is_me = msg['sender'] == st.session_state.nickname
+                with st.chat_message("user" if is_me else "assistant"):
+                    st.markdown(f"**@{msg['sender']}**  *{f_time}*")
+                    if d_text: 
+                        st.write(d_text)
+                    if d_img and "[Ошибка]" not in d_img and "[Зашифровано" not in d_img:
+                        try:
+                            st.image(base64.b64decode(d_img.encode()))
+                        except:
+                            pass
         else:
-            st.error("Ошибка подключения к базе")
-    except:
-        pass
+            st.error("Ошибка подключения к базе данных.")
+    except Exception as e:
+        st.error(f"Ошибка вывода сообщений: {e}")
 
     time.sleep(2.5)
     st.rerun()
