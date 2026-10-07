@@ -28,20 +28,13 @@ def decrypt_text(cipher_text: str, password: str) -> str:
         return cipher_text
     except: return "[Зашифровано — неверный ключ]"
 
-# --- СЕССИЯ, КУКИ И ДИЗАЙН ---
+# --- СЕССИЯ И ДИЗАЙН ---
 if "theme" not in st.session_state: st.session_state.theme = "dark"
+if "user_email" not in st.session_state: st.session_state.user_email = ""
+if "nickname" not in st.session_state: st.session_state.nickname = ""
 if "active_chat" not in st.session_state: st.session_state.active_chat = "Общий чат"
 if "room_password" not in st.session_state: st.session_state.room_password = "default_secure_pass"
 if "edit_profile" not in st.session_state: st.session_state.edit_profile = False
-
-# ЗАПОМИНАНИЕ АККАУНТА (Через куки браузера)
-cookies = st.context.cookies
-if "saved_email" in cookies and "saved_nick" in cookies:
-    st.session_state.user_email = cookies["saved_email"]
-    st.session_state.nickname = cookies["saved_nick"]
-else:
-    if "user_email" not in st.session_state: st.session_state.user_email = ""
-    if "nickname" not in st.session_state: st.session_state.nickname = ""
 
 headers = {"apikey": KEY, "Authorization": f"Bearer {KEY}", "Content-Type": "application/json", "Prefer": "return=minimal"}
 
@@ -53,7 +46,9 @@ st.markdown(f"<style>.stApp {{background-color: {bg}; color: {tc};}}</style>", u
 def get_profile(nickname):
     try:
         res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
-        if res.status_code == 200 and res.json(): return res.json()
+        if res.status_code == 200 and res.json():
+            data = res.json()
+            return data[0] if isinstance(data, list) else data
     except: pass
     return {}
 
@@ -65,43 +60,56 @@ def get_all_profiles_cached():
     except: pass
     return {}
 
-# --- ОКНО ВХОДА ---
+# --- ОКНО ВХОДА И УПРОЩЕННОЙ РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
     st.title("💬 Vexus — Вход")
-    st.markdown("### 🔑 Авторизация через Gmail / Почту")
-    email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
-    nick_input = st.text_input("Придумайте ваш никнейм в Vexus:", max_chars=15).strip().lower()
     
-    if st.button("Войти / Зарегистрироваться", use_container_width=True):
-        if not email_input or not nick_input: st.error("Заполните все поля!")
-        elif "@" not in email_input: st.error("Введите корректный Gmail адрес!")
-        else:
-            try:
-                res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
-                res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
-                existing_user = res_email if (isinstance(res_email, list) and len(res_email) > 0) else None
-                
-                if existing_user:
-                    if existing_user.get('nickname') == nick_input:
-                        st.context.cookies["saved_email"] = email_input
-                        st.context.cookies["saved_nick"] = nick_input
-                        st.session_state.user_email = email_input
-                        st.session_state.nickname = nick_input
-                        st.success("Успешный вход!")
-                        st.rerun()
-                    else: st.error("Этот Gmail уже привязан к другому никнейму!")
+    tab1, tab2 = st.tabs(["🔑 Быстрый Вход", "📝 Новая Регистрация"])
+    
+    with tab1:
+        st.markdown("### Войти по никнейму")
+        login_nick = st.text_input("Введите ваш никнейм:", key="login_nav").strip().lower()
+        if st.button("Войти в аккаунт", use_container_width=True):
+            if login_nick:
+                prof = get_profile(login_nick)
+                if prof and prof.get('nickname') == login_nick:
+                    st.session_state.nickname = login_nick
+                    st.session_state.user_email = prof.get('email', '')
+                    st.success("Успешный вход!")
+                    st.rerun()
                 else:
-                    if res_nick and len(res_nick) > 0: st.error("Этот никнейм уже занят!")
+                    st.error("Пользователь с таким никнеймом не найден!")
+            else:
+                st.error("Введите никнейм!")
+
+    with tab2:
+        st.markdown("### Создать новый профиль Vexus")
+        email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
+        nick_input = st.text_input("Придумайте ваш никнейм (только буквы/цифры):", max_chars=15).strip().lower()
+        
+        if st.button("Зарегистрироваться", use_container_width=True):
+            if not email_input or not nick_input: 
+                st.error("Заполните все поля!")
+            elif "@" not in email_input: 
+                st.error("Введите корректный Gmail адрес!")
+            else:
+                try:
+                    res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
+                    res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
+                    
+                    if res_email and len(res_email) > 0:
+                        st.error("Этот Gmail уже привязан к другому аккаунту! Используйте вкладку 'Быстрый Вход'.")
+                    elif res_nick and len(res_nick) > 0:
+                        st.error("Этот никнейм уже занят!")
                     else:
                         new_user = {"email": email_input, "nickname": nick_input}
                         requests.post(f"{URL}/rest/v1/profiles", headers=headers, json=new_user)
-                        st.context.cookies["saved_email"] = email_input
-                        st.context.cookies["saved_nick"] = nick_input
                         st.session_state.user_email = email_input
                         st.session_state.nickname = nick_input
-                        st.success("Регистрация Успешна!")
+                        st.success("Регистрация успешна!")
                         st.rerun()
-            except Exception as e: st.error(f"Ошибка авторизации: {e}")
+                except Exception as e: 
+                    st.error(f"Ошибка базы: {e}")
 
 # --- ГЛАВНЫЙ ИНТЕРФЕЙС VEXUS ---
 else:
@@ -141,8 +149,6 @@ else:
             st.session_state.room_password = st.text_input("Пароль чата:", value=st.session_state.room_password, type="password")
             
         if st.button("Выйти из аккаунта", use_container_width=True):
-            if "saved_email" in st.context.cookies: del st.context.cookies["saved_email"]
-            if "saved_nick" in st.context.cookies: del st.context.cookies["saved_nick"]
             st.session_state.nickname = ""
             st.session_state.user_email = ""
             st.rerun()
@@ -188,10 +194,9 @@ else:
 
         avatar_cache = get_all_profiles_cached()
 
-        # Отображение сообщений — ПОЛНОСТЬЮ ЛИНЕЙНЫЙ ВЫВОД БЕЗ ВЛОЖЕННЫХ IF
+        # Отображение сообщений — СТАБИЛЬНЫЙ ВЫВОД БЕЗ ОШИБОК
         res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30", headers=headers)
         if res.status_code == 200:
             for msg in reversed(res.json()):
-                # Проверяем комнату в один надежный рядок
                 if msg.get("sender_room", "Общий чат") == st.session_state.active_chat:
                     d_text = decrypt_text(msg.get('text', ''), st.session_state.room_password) if msg.get('text', '').startswith("gAAAAA") else msg.get('text', '')
