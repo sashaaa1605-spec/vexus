@@ -44,7 +44,7 @@ st.markdown(f"<style>.stApp {{background-color: {bg}; color: {tc};}}</style>", u
 
 # --- ОКНО ВХОДА ---
 if not st.session_state.nickname:
-    st.title("💬 ТГ Мессенджер v3.1")
+    st.title("💬 vexus v3.1")
     nick_input = st.text_input("Введите ваш никнейм для входа:", max_chars=15)
     if st.button("Войти в мессенджер"):
         if nick_input.strip():
