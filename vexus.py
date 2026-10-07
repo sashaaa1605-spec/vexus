@@ -51,7 +51,7 @@ else:
                 res = requests.post(post_url, headers=headers, json=data)
                 
                 # Проверка: если код ответа НЕ 200 и НЕ 201 — выводим ошибку
-                if res.status_code not in:
+                if res.status_code >= 400:
                     st.error(f"Ошибка отправки (Код {res.status_code}): {res.text}")
                 else:
                     st.session_state.msg_input = "" # Очищаем поле
