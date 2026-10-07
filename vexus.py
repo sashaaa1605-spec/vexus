@@ -3,7 +3,7 @@ from supabase import create_client, Client
 import time
 
 # --- НАЛАШТУВАННЯ SUPABASE ---
-URL = "https://dqpdfreewxzefsaejmob.supabase.co/rest/v1/"
+URL = "https://dqpdfreewxzefsaejmob.supabase.co"
 KEY = "sb_publishable_XBWFiWdA9Eg2msn3T04XkQ_oKX69lpG"
 
 @st.cache_resource
