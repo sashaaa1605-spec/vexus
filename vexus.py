@@ -213,4 +213,3 @@ else:
                 for msg in reversed(filtered):
                     d_text = msg.get('text', '')
                     d_img = msg.get('image_url', '')
-
