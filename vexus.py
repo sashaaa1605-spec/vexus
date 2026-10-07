@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import time
 import base64
+import random
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -45,7 +46,7 @@ st.markdown(f"<style>.stApp {{background-color: {bg}; color: {tc};}}</style>", u
 # --- ФУНКЦИИ ПРОФИЛЕЙ ---
 def get_profile(nickname):
     try:
-        res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
+        res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}&r={random.randint(1,99999)}", headers=headers)
         if res.status_code == 200 and res.json():
             data = res.json()
             return data[0] if isinstance(data, list) else data
@@ -54,7 +55,7 @@ def get_profile(nickname):
 
 def get_all_profiles_cached():
     try:
-        res = requests.get(f"{URL}/rest/v1/profiles", headers=headers)
+        res = requests.get(f"{URL}/rest/v1/profiles?r={random.randint(1,99999)}", headers=headers)
         if res.status_code == 200:
             return {p['nickname']: p.get('avatar_b64', '') for p in res.json() if 'nickname' in p}
     except: pass
@@ -194,9 +195,8 @@ else:
 
         avatar_cache = get_all_profiles_cached()
 
-        # Отображение сообщений — СТАБИЛЬНЫЙ ВЫВОД БЕЗ ОШИБОК
-        res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30", headers=headers)
+        # Антикэш-запрос к Supabase (?r=случайное_число) заставит Streamlit обновить переписку
+        res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30&r={random.randint(1,99999)}", headers=headers)
         if res.status_code == 200:
             for msg in reversed(res.json()):
                 if msg.get("sender_room", "Общий чат") == st.session_state.active_chat:
-                    d_text = decrypt_text(msg.get('text', ''), st.session_state.room_password) if msg.get('text', '').startswith("gAAAAA") else msg.get('text', '')
