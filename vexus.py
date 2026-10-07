@@ -41,16 +41,16 @@ st.markdown(f"<style>.stApp {{background-color: {bg}; color: {tc};}}</style>", u
 
 # --- ФУНКЦИИ ПРОФИЛЕЙ ---
 def get_profile(nickname):
-    try:
-        res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
-        if res.status_code == 200 and res.json():
-            return res.json()[0]
-    except: pass
+    res = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nickname}", headers=headers)
+    if res.status_code == 200:
+        data = res.json()
+        if data:
+            return data[0]
     return {}
 
 # --- ОКНО ВХОДА И РЕГИСТРАЦИИ ---
 if not st.session_state.nickname:
-    st.title("💬 Vexus v4.3 — Вход")
+    st.title("💬 Vexus v4.4 — Вход")
     
     st.markdown("### 🔑 Авторизация через Gmail / Почту")
     email_input = st.text_input("Введите ваш Gmail:", placeholder="yourname@gmail.com").strip().lower()
@@ -62,30 +62,28 @@ if not st.session_state.nickname:
         elif "@" not in email_input:
             st.error("Введите корректный Gmail адрес!")
         else:
-            try:
-                res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
-                res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
-                
-                if res_email:
-                    if res_email[0]['nickname'] == nick_input:
-                        st.session_state.user_email = email_input
-                        st.session_state.nickname = nick_input
-                        st.success("Успешный вход!")
-                        st.rerun()
-                    else:
-                        st.error("Этот Gmail уже привязан к другому никнейму!")
+            res_email = requests.get(f"{URL}/rest/v1/profiles?email=eq.{email_input}", headers=headers).json()
+            res_nick = requests.get(f"{URL}/rest/v1/profiles?nickname=eq.{nick_input}", headers=headers).json()
+            
+            if res_email:
+                user_data = res_email[0] if isinstance(res_email, list) else res_email
+                if user_data.get('nickname') == nick_input:
+                    st.session_state.user_email = email_input
+                    st.session_state.nickname = nick_input
+                    st.success("Успешный вход!")
+                    st.rerun()
                 else:
-                    if res_nick:
-                        st.error("Этот никнейм уже занят!")
-                    else:
-                        new_user = {"email": email_input, "nickname": nick_input}
-                        requests.post(f"{URL}/rest/v1/profiles", headers=headers, json=new_user)
-                        st.session_state.user_email = email_input
-                        st.session_state.nickname = nick_input
-                        st.success("Регистрация успешна!")
-                        st.rerun()
-            except Exception as e:
-                st.error(f"Ошибка базы: {e}")
+                    st.error("Этот Gmail уже привязан к другому никнейму!")
+            else:
+                if res_nick:
+                    st.error("Этот никнейм уже занят!")
+                else:
+                    new_user = {"email": email_input, "nickname": nick_input}
+                    requests.post(f"{URL}/rest/v1/profiles", headers=headers, json=new_user)
+                    st.session_state.user_email = email_input
+                    st.session_state.nickname = nick_input
+                    st.success("Регистрация успешна!")
+                    st.rerun()
 
 # --- ГЛАВНЫЙ ИНТЕРФЕЙС VEXUS ---
 else:
@@ -175,23 +173,21 @@ else:
                 img_b64 = base64.b64encode(img_file.getvalue()).decode()
 
             if msg_text or img_b64:
-                try:
-                    if "🔒-" in st.session_state.active_chat:
-                        f_text = encrypt_text(msg_text, st.session_state.room_password) if msg_text else ""
-                        f_img = encrypt_text(img_b64, st.session_state.room_password) if img_b64 else ""
-                    else:
-                        f_text = msg_text
-                        f_img = img_b64
-                        
-                    data = {
-                        "sender": st.session_state.nickname, 
-                        "text": f_text, 
-                        "image_url": f_img,
-                        "sender_room": st.session_state.active_chat
-                    }
-                    requests.post(f"{URL}/rest/v1/messages", headers=headers, json=data)
-                    st.session_state.msg_input = ""
-                except: pass
+                if "🔒-" in st.session_state.active_chat:
+                    f_text = encrypt_text(msg_text, st.session_state.room_password) if msg_text else ""
+                    f_img = encrypt_text(img_b64, st.session_state.room_password) if img_b64 else ""
+                else:
+                    f_text = msg_text
+                    f_img = img_b64
+                    
+                data = {
+                    "sender": st.session_state.nickname, 
+                    "text": f_text, 
+                    "image_url": f_img,
+                    "sender_room": st.session_state.active_chat
+                }
+                requests.post(f"{URL}/rest/v1/messages", headers=headers, json=data)
+                st.session_state.msg_input = ""
 
         with st.form(key="send_form", clear_on_submit=True):
             st.text_input("Напишите сообщение...", key="msg_input")
@@ -200,18 +196,21 @@ else:
 
         st.divider()
 
-        # Отображение сообщений
-        try:
-            res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30", headers=headers)
-            if res.status_code == 200:
-                messages = res.json()
-                for msg in reversed(messages):
-                    if msg.get("sender_room", "Общий чат") == st.session_state.active_chat:
-                        d_text = msg.get('text', '')
-                        d_img = msg.get('image_url', '')
+        # Отображение сообщений без единого опасного try-except блока
+        res = requests.get(f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=30", headers=headers)
+        if res.status_code == 200:
+            messages = res.json()
+            for msg in reversed(messages):
+                if msg.get("sender_room", "Общий чат") == st.session_state.active_chat:
+                    d_text = msg.get('text', '')
+                    d_img = msg.get('image_url', '')
 
-                        if "🔒-" in st.session_state.active_chat:
-                            d_text = decrypt_text(d_text, st.session_state.room_password)
-                            d_img = decrypt_text(d_img, st.session_state.room_password)
+                    if "🔒-" in st.session_state.active_chat:
+                        d_text = decrypt_text(d_text, st.session_state.room_password)
+                        d_img = decrypt_text(d_img, st.session_state.room_password)
 
-                        is_me = msg['sender'] == st.session_state.nickname
+                    is_me = msg['sender'] == st.session_state.nickname
+                    author_prof = get_profile(msg['sender'])
+                    
+                    with st.chat_message("user" if is_me else "assistant"):
+                        if author_prof.get("avatar_b64"):
