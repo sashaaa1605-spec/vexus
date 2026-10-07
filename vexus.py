@@ -15,7 +15,7 @@ if "nickname" not in st.session_state:
 
 # --- ОКНО ВХОДА ---
 if not st.session_state.nickname:
-    st.subheader("Введите ваш никнейм для входа:")
+    st.subheader("Введите ваш никнейм для входу:")
     nick_input = st.text_input("Мой ник...", max_chars=15)
     if st.button("Войти в чат"):
         if nick_input.strip():
@@ -34,7 +34,7 @@ else:
 
     st.divider()
 
-    # Создаем чистые заголовки для API
+    # Чистые заголовки для работы с API
     headers = {
         "apikey": KEY,
         "Authorization": f"Bearer {KEY}",
@@ -46,14 +46,15 @@ else:
         msg_text = st.session_state.msg_input.strip()
         if msg_text:
             try:
-                # Прямой POST запрос к таблице messages
                 post_url = f"{URL}/rest/v1/messages"
                 data = {"sender": st.session_state.nickname, "text": msg_text}
                 res = requests.post(post_url, headers=headers, json=data)
+                
+                # Проверка: если код ответа НЕ 200 и НЕ 201 — выводим ошибку
                 if res.status_code not in:
-                    st.error(f"Ошибка отправки: {res.text}")
+                    st.error(f"Ошибка отправки (Код {res.status_code}): {res.text}")
                 else:
-                    st.session_state.msg_input = ""
+                    st.session_state.msg_input = "" # Очищаем поле
             except Exception as e:
                 st.error(f"Ошибка отправки: {e}")
 
@@ -63,9 +64,8 @@ else:
 
     st.divider()
 
-    # Загрузка сообщений через прямой GET запрос
+    # Загрузка сообщений
     try:
-        # Запрашиваем последние 50 сообщений, сортируем по id
         get_url = f"{URL}/rest/v1/messages?select=*&order=id.desc&limit=50"
         response = requests.get(get_url, headers=headers)
         
@@ -77,10 +77,11 @@ else:
             else:
                 st.info("Чат пуст. Напишите что-нибудь первым!")
         else:
-            st.error(f"Ошибка сервера Supabase ({response.status_code}): {response.text}")
+            st.error(f"Ошибка сервера Supabase (Код {response.status_code}): {response.text}")
             
     except Exception as e:
         st.error(f"Ошибка загрузки сообщений: {e}")
 
+    # Автообновление каждые 3 секунды
     time.sleep(3)
     st.rerun()
